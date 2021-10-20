@@ -8,6 +8,9 @@ L_MOTOR_SECOND = 24
 # Right motor GPIO number
 R_MOTOR_FIRST = 25
 R_MOTOR_SECOND = 26
+# Ultrasonic sensor GPIO number
+TRIG = 16
+ECHO = 17
 
 
 class RobotController:
@@ -16,7 +19,7 @@ class RobotController:
     def __init__(self):
         # Init wiringpi
         wiringpi.wiringPiSetupGpio()
-        # Pin mode set as an output
+        # Motor pin set as an output
         wiringpi.pinMode(L_MOTOR_FIRST, wiringpi.OUTPUT)
         wiringpi.pinMode(L_MOTOR_SECOND, wiringpi.OUTPUT)
         wiringpi.pinMode(R_MOTOR_FIRST, wiringpi.OUTPUT)
@@ -31,6 +34,9 @@ class RobotController:
         wiringpi.softPwmWrite(L_MOTOR_SECOND, 0)
         wiringpi.softPwmWrite(R_MOTOR_FIRST, 0)
         wiringpi.softPwmWrite(R_MOTOR_SECOND, 0)
+        wiringpi.wiringPiSetupGpio()
+        wiringpi.pinMode(TRIG, wiringpi.OUTPUT)
+        wiringpi.pinMode(ECHO, wiringpi.INPUT)
 
     def stop(self):
         wiringpi.softPwmWrite(L_MOTOR_FIRST, 0)
@@ -39,54 +45,52 @@ class RobotController:
         wiringpi.softPwmWrite(R_MOTOR_SECOND, 0)
 
     def move_forward(self):
-        startTime = time.time()
-        elapsedTime = time.time()
-        try:
-            # Move forward 3 sec
-            while elapsedTime - startTime < 3:
-                wiringpi.softPwmWrite(L_MOTOR_FIRST, 0)
-                wiringpi.softPwmWrite(L_MOTOR_SECOND, 80)
-                wiringpi.softPwmWrite(R_MOTOR_FIRST, 0)
-                wiringpi.softPwmWrite(R_MOTOR_SECOND, 80)
-                elapsedTime = time.time()
-
-        except KeyboardInterrupt:
-            print("Keyboard interrupt.")
-            self.stop()
-
-        self.stop()
-
-        # Waiting stop the motor completely
-        time.sleep(1)
+        wiringpi.softPwmWrite(L_MOTOR_FIRST, 0)
+        wiringpi.softPwmWrite(L_MOTOR_SECOND, 80)
+        wiringpi.softPwmWrite(R_MOTOR_FIRST, 0)
+        wiringpi.softPwmWrite(R_MOTOR_SECOND, 80)
 
     def move_backward(self):
-        startTime = time.time()
-        elapsedTime = time.time()
-        try:
-            # Move backward 3 sec
-            while elapsedTime - startTime < 3:
-                wiringpi.softPwmWrite(L_MOTOR_FIRST, 80)
-                wiringpi.softPwmWrite(L_MOTOR_SECOND, 0)
-                wiringpi.softPwmWrite(R_MOTOR_FIRST, 80)
-                wiringpi.softPwmWrite(R_MOTOR_SECOND, 0)
-                elapsedTime = time.time()
+        wiringpi.softPwmWrite(L_MOTOR_FIRST, 80)
+        wiringpi.softPwmWrite(L_MOTOR_SECOND, 0)
+        wiringpi.softPwmWrite(R_MOTOR_FIRST, 80)
+        wiringpi.softPwmWrite(R_MOTOR_SECOND, 0)
 
-        except KeyboardInterrupt:
-            print("Keyboard interrupt.")
-            self.stop()
+    def read_distance(self):
+        wiringpi.digitalWrite(TRIG, wiringpi.GPIO.HIGH)
+        # Wait 10 micor sec.
+        time.sleep(0.00001)
+        wiringpi.digitalWrite(TRIG, wiringpi.GPIO.LOW)
 
-        self.stop()
+        signalOff = 0
+        signalOn = 0
 
-        # Waiting stop the motor completely
-        time.sleep(1)
+        while wiringpi.digitalRead(ECHO) == wiringpi.GPIO.LOW:
+            signalOff = time.time()
+
+        while wiringpi.digitalRead(ECHO) == wiringpi.GPIO.HIGH:
+            signalOn = time.time()
+
+        duration = signalOn - signalOff
+        distance = duration * 34000 / 2
+
+        time.sleep(0.1)
+
+        return distance
 
 
 def main():
     robotController = RobotController()
-    robotController.move_backward()
-    robotController.move_forward()
+    try:
+        while True:
+            distance = robotController.read_distance()
+            print("Distance: {}".format(distance))
+            robotController.move_forward()
 
-    print("done")
+            if distance < 15.0:
+                robotController.stop()
+    finally:
+        robotController.stop()
 
 
 if __name__ == "__main__":
